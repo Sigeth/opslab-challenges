@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Sigeth/opslab-core-go/main/schema/challenge-package.schema.json
+apiVersion: opslab.io/v1alpha1
+kind: ChallengePackage
+metadata:
+  name: exposed-debug-port
+  version: 0.1.0
+spec:
+  title: Exposed debug port
+  summary: A web container serves a database dump and runs a debug server that leaks its secrets. Close the leaks without taking the site down.
+  category: containers
+  difficulty: easy
+  estimatedTime: 15m
+  tags: [network, web, secrets]
+  authors:
+    - name: opslab
+      url: https://github.com/Sigeth
+  license: MIT
+
+  machines:
+    - name: web
+      runtime: pod
+      # Built from images/web/Dockerfile (student user, minimal tooling).
+      image: ghcr.io/sigeth/opslab-challenges/exposed-debug-port/web:0.1.0
+      resources: {cpu: 100m, memory: 64Mi}
+      setup: [setup/setup.sh]
+
+  access:
+    terminals:
+      - {machine: web, label: web}
+
+  tasks:
+    - id: debug-port-closed
+      title: Nothing listens on the debug port 9090
+      points: 10
+      hints:
+        - {text: "`netstat -tlnp` lists listening sockets and their process.", cost: 2}
+      check:
+        machine: web
+        port: {port: 9090, expect: closed}
+    - id: dump-not-served
+      title: The site on port 8080 no longer serves /backup.sql
+      points: 10
+      hints:
+        - {text: "busybox `httpd` serves every file of its document root (`-h`).", cost: 2}
+      check:
+        machine: web
+        http: {port: 8080, path: /backup.sql, expectStatus: 404}

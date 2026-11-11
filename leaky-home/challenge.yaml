@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Sigeth/opslab-core-go/main/schema/challenge-package.schema.json
+apiVersion: opslab.io/v1alpha1
+kind: ChallengePackage
+metadata:
+  name: leaky-home
+  version: 0.1.0
+spec:
+  title: Leaky home directory
+  summary: A developer left an SSH key, application secrets and a backup script open to every user of the machine. Lock their home directory down.
+  category: linux-hardening
+  difficulty: easy
+  estimatedTime: 15m
+  tags: [permissions, secrets, ssh]
+  authors:
+    - name: opslab
+      url: https://github.com/Sigeth
+  license: MIT
+
+  machines:
+    - name: box
+      runtime: pod
+      # Built from images/box/Dockerfile (student user, minimal tooling).
+      image: ghcr.io/sigeth/opslab-challenges/leaky-home/box:0.1.0
+      resources: {cpu: 100m, memory: 128Mi}
+      setup: [setup/setup.sh]
+
+  access:
+    terminals:
+      - {machine: box, label: workstation}
+
+  tasks:
+    - id: ssh-key-private
+      title: The SSH private key is readable and writable by its owner only
+      points: 10
+      hints:
+        - {text: "`ls -l ~/.ssh` shows the permission bits. SSH itself refuses keys that others can read.", cost: 2}
+      check:
+        machine: box
+        file: {path: /home/student/.ssh/id_ed25519, mode: "0600"}
+    - id: ssh-dir-private
+      title: Only the owner can enter ~/.ssh
+      points: 5
+      check:
+        machine: box
+        file: {path: /home/student/.ssh, mode: "0700"}
+    - id: env-file-private
+      title: Group and other users cannot access ~/app/.env
+      points: 10
+      hints:
+        - {text: "`chmod go=` removes every permission of the group and of other users.", cost: 2}
+      check:
+        machine: box
+        shell: {run: 'test -f /home/student/app/.env && test -z "$(find /home/student/app/.env -perm /077)"'}
+    - id: script-not-writable
+      title: Nobody else can modify the scripts in ~/bin
+      points: 10
+      hints:
+        - {text: "A script anyone can edit runs anyone's code with your rights. Look for the `w` in the last triplet.", cost: 3}
+      check:
+        machine: box
+        shell: {run: 'test -f /home/student/bin/backup.sh && test -z "$(find /home/student/bin -perm -o+w)"'}
+    - id: history-clean
+      title: The database password is gone from the shell history
+      points: 5
+      hints:
+        - {text: "Your own bash writes its history to ~/.bash_history when it exits: typing the password again puts it back.", cost: 2}
+      check:
+        machine: box
+        file: {path: /home/student/.bash_history, notContains: hunter2}

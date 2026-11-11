@@ -1,0 +1,39 @@
+name: ci
+
+# Pipelines live in github.com/Sigeth/opslab-ci (Dagger). Every directory with
+# a challenge.yaml is linted on its own:
+#   dagger -m github.com/Sigeth/opslab-ci@v0.2.0 call challenge-lint --source=leaky-home
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  challenges:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.find.outputs.list }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: find
+        run: echo "list=$(ls -d */challenge.yaml | xargs -n1 dirname | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+
+  lint:
+    needs: challenges
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        challenge: ${{ fromJSON(needs.challenges.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dagger/dagger-for-github@v8.4.1
+        with:
+          version: "0.21.11"
+          module: github.com/Sigeth/opslab-ci@v0.2.0
+          verb: call
+          args: challenge-lint --source=${{ matrix.challenge }}
